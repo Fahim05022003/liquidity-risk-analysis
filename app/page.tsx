@@ -9,6 +9,9 @@ import {
   RefreshCw,
   BarChart3,
   AlertCircle,
+  LogIn,
+  LogOut,
+  User,
 } from 'lucide-react'
 import { BalanceCards } from '@/components/balance-cards'
 import { TransactionForm } from '@/components/transaction-form'
@@ -16,6 +19,9 @@ import { RiskGauge } from '@/components/risk-gauge'
 import { AlertPanel } from '@/components/alert-panel'
 import { HistoryDrawer } from '@/components/history-drawer'
 import { ApiKeyModal } from '@/components/api-key-modal'
+import { saveAnalysisResult } from '@/app/actions/analysis'
+import { useSession, signOut } from '@/lib/auth-client'
+import Link from 'next/link'
 import type {
   BalancesInput,
   Transaction,
@@ -64,6 +70,7 @@ function saveApiKey(key: string) {
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession()
   const [balances, setBalances] = useState<BalancesInput>(DEFAULT_BALANCES)
   const [transactions, setTransactions] = useState<Omit<Transaction, 'id'>[]>(DEFAULT_TRANSACTIONS)
   const [result, setResult] = useState<AnalysisResult | null>(null)
@@ -104,6 +111,11 @@ export default function DashboardPage() {
       }
       const analysisResult = data as AnalysisResult
       setResult(analysisResult)
+
+      // Persist to Neon if signed in (fire-and-forget, don't block UI)
+      if (session?.user) {
+        saveAnalysisResult({ balances, transactions }, analysisResult).catch(() => {})
+      }
 
       const entry: HistoryEntry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -211,6 +223,36 @@ export default function DashboardPage() {
               <KeyRound size={14} />
               <span className="hidden sm:inline">{apiKey ? 'Key Set' : 'Set Key'}</span>
             </button>
+
+            {/* Auth */}
+            {session?.user ? (
+              <div className="flex items-center gap-1">
+                <span
+                  title={session.user.email}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground bg-muted"
+                >
+                  <User size={12} />
+                  <span className="hidden sm:inline max-w-[80px] truncate">
+                    {session.user.name ?? session.user.email}
+                  </span>
+                </span>
+                <button
+                  onClick={() => signOut()}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  aria-label="Sign out"
+                >
+                  <LogOut size={12} />
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/sign-in"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+              >
+                <LogIn size={14} />
+                <span className="hidden sm:inline">Sign In</span>
+              </Link>
+            )}
           </div>
         </div>
       </header>
