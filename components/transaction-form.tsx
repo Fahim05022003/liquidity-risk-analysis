@@ -26,7 +26,13 @@ const STATUS_STYLES: Record<TxStatus, string> = {
 }
 
 function emptyTx(): Omit<Transaction, 'id'> {
-  return { provider: 'bKash', type: 'Cash Out', amount: 0, status: 'Success' }
+  return {
+    provider: 'bKash',
+    type: 'Cash Out',
+    amount: 0,
+    status: 'Success',
+    timestamp: Date.now(),
+  }
 }
 
 const selectClass =
@@ -43,7 +49,7 @@ export function TransactionForm({ transactions, onChange }: TransactionFormProps
 
   function updateRow(index: number, field: keyof Omit<Transaction, 'id'>, value: string | number) {
     const updated = transactions.map((tx, i) =>
-      i === index ? { ...tx, [field]: value } : tx
+      i === index ? { ...tx, timestamp: tx.timestamp ?? Date.now(), [field]: value } : tx
     )
     onChange(updated)
   }

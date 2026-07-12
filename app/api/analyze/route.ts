@@ -24,8 +24,8 @@ Response schema (return ONLY this JSON object):
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as AnalysisRequest
-    const { balances, transactions } = body
+    const body = await req.json() as AnalysisRequest & { forecast?: AnalysisResult }
+    const { balances, transactions, forecast } = body
 
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
@@ -49,6 +49,11 @@ Current Balances:
 
 Recent Transactions (Last 15 minutes):
 ${JSON.stringify(transactions, null, 2)}
+
+Deterministic Liquidity Forecast Evidence:
+${forecast ? JSON.stringify(forecast, null, 2) : 'No deterministic forecast supplied.'}
+
+When forecast evidence is supplied, use its projected exhaustion timing and dominant-provider attribution as quantitative evidence. Explain it clearly in Bengali, but do not recommend blocking or automatic financial action.
 
 Provide your analysis strictly following the rules in the system prompt. Respond ONLY with the JSON object.`
 
@@ -80,7 +85,15 @@ Provide your analysis strictly following the rules in the system prompt. Respond
       }
     }
 
-    return NextResponse.json(result)
+    return NextResponse.json({
+      ...result,
+      projected_exhaustion_minutes: forecast?.projected_exhaustion_minutes,
+      projected_exhaustion_at: forecast?.projected_exhaustion_at,
+      dominant_provider: forecast?.dominant_provider,
+      dominant_provider_share: forecast?.dominant_provider_share,
+      forecast_rate_per_minute: forecast?.forecast_rate_per_minute,
+      source: 'ai_analysis',
+    })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown server error.'
     // Handle OpenAI auth errors gracefully

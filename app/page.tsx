@@ -18,6 +18,7 @@ import { RiskGauge } from '@/components/risk-gauge'
 import { AlertPanel } from '@/components/alert-panel'
 import { HistoryDrawer } from '@/components/history-drawer'
 import { saveAnalysisResult } from '@/app/actions/analysis'
+import { createLiquidityForecast } from '@/lib/liquidity-forecast'
 import { useSession, signOut } from '@/lib/auth-client'
 import Link from 'next/link'
 import type {
@@ -34,10 +35,11 @@ const DEFAULT_BALANCES: BalancesInput = {
   rocketBalance: 0,
 }
 
+const INITIAL_TIME = Date.now()
 const DEFAULT_TRANSACTIONS: Omit<Transaction, 'id'>[] = [
-  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success' },
-  { provider: 'bKash', type: 'Cash Out', amount: 24500, status: 'Success' },
-  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success' },
+  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success', timestamp: INITIAL_TIME - 12 * 60 * 1000 },
+  { provider: 'bKash', type: 'Cash Out', amount: 24500, status: 'Success', timestamp: INITIAL_TIME - 7 * 60 * 1000 },
+  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success', timestamp: INITIAL_TIME - 2 * 60 * 1000 },
 ]
 
 const LS_KEY_HISTORY = 'alrip_history'
@@ -99,6 +101,15 @@ export default function DashboardPage() {
     setHistory(loadHistory())
   }, [])
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setResult(createLiquidityForecast(balances, transactions))
+      setError(null)
+    }, 1500)
+
+    return () => window.clearTimeout(timer)
+  }, [balances, transactions])
+
   const handleAnalyze = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -106,7 +117,11 @@ export default function DashboardPage() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ balances, transactions }),
+        body: JSON.stringify({
+          balances,
+          transactions,
+          forecast: createLiquidityForecast(balances, transactions),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -161,7 +176,6 @@ export default function DashboardPage() {
       rocketBalance: current.rocketBalance + nextImpact.rocketBalance - previousImpact.rocketBalance,
     }))
     setTransactions(nextTransactions)
-    setResult(null)
   }
 
   const totalBalance =
@@ -270,7 +284,7 @@ export default function DashboardPage() {
             Agent Liquidity &amp; Risk Intelligence Platform
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            মাল্টি-প্রোভাইডার MFS লেনদেন বিশ্লেষণ — bKash · Nagad · Rocket
+            লাইভ ১৫-মিনিট পূর্বাভাস — কখন ক্যাশ শেষ হতে পারে এবং কোন provider চাপ তৈরি করছে
           </p>
         </div>
 

@@ -8,6 +8,7 @@ export interface Transaction {
   type: TxType
   amount: number
   status: TxStatus
+  timestamp?: number
 }
 
 export interface BalancesInput {
@@ -32,6 +33,12 @@ export interface AnalysisResult {
   message_bn: string
   evidence: string
   recommended_action: string
+  projected_exhaustion_minutes?: number
+  projected_exhaustion_at?: string
+  dominant_provider?: Provider
+  dominant_provider_share?: number
+  forecast_rate_per_minute?: number
+  source?: 'live_forecast' | 'ai_analysis'
 }
 
 export interface HistoryEntry {
