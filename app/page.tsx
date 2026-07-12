@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Activity,
   History,
-  KeyRound,
   Zap,
   RefreshCw,
   BarChart3,
@@ -18,7 +17,6 @@ import { TransactionForm } from '@/components/transaction-form'
 import { RiskGauge } from '@/components/risk-gauge'
 import { AlertPanel } from '@/components/alert-panel'
 import { HistoryDrawer } from '@/components/history-drawer'
-import { ApiKeyModal } from '@/components/api-key-modal'
 import { saveAnalysisResult } from '@/app/actions/analysis'
 import { useSession, signOut } from '@/lib/auth-client'
 import Link from 'next/link'
@@ -43,7 +41,6 @@ const DEFAULT_TRANSACTIONS: Omit<Transaction, 'id'>[] = [
 ]
 
 const LS_KEY_HISTORY = 'alrip_history'
-const LS_KEY_API = 'alrip_openai_key'
 const MAX_HISTORY = 20
 
 function loadHistory(): HistoryEntry[] {
@@ -60,15 +57,6 @@ function saveHistory(entries: HistoryEntry[]) {
   localStorage.setItem(LS_KEY_HISTORY, JSON.stringify(entries.slice(-MAX_HISTORY)))
 }
 
-function loadApiKey(): string {
-  if (typeof window === 'undefined') return ''
-  return localStorage.getItem(LS_KEY_API) ?? ''
-}
-
-function saveApiKey(key: string) {
-  localStorage.setItem(LS_KEY_API, key)
-}
-
 export default function DashboardPage() {
   const { data: session } = useSession()
   const [balances, setBalances] = useState<BalancesInput>(DEFAULT_BALANCES)
@@ -78,31 +66,19 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [keyModalOpen, setKeyModalOpen] = useState(false)
-  const [apiKey, setApiKey] = useState('')
 
   useEffect(() => {
     setHistory(loadHistory())
-    setApiKey(loadApiKey())
-  }, [])
-
-  const handleSaveKey = useCallback((key: string) => {
-    setApiKey(key)
-    saveApiKey(key)
   }, [])
 
   const handleAnalyze = useCallback(async () => {
-    if (!apiKey) {
-      setKeyModalOpen(true)
-      return
-    }
     setIsLoading(true)
     setError(null)
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ balances, transactions, apiKey }),
+        body: JSON.stringify({ balances, transactions }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -133,7 +109,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [apiKey, balances, transactions])
+  }, [balances, transactions, session?.user])
 
   function handleRestore(entry: HistoryEntry) {
     setBalances(entry.request.balances)
@@ -211,19 +187,6 @@ export default function DashboardPage() {
                 </span>
               )}
             </button>
-            <button
-              onClick={() => setKeyModalOpen(true)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                apiKey
-                  ? 'text-[color:var(--cash)] bg-[color:var(--cash)]/10 hover:bg-[color:var(--cash)]/20'
-                  : 'text-[color:var(--severity-medium)] bg-[color:var(--severity-medium)]/10 hover:bg-[color:var(--severity-medium)]/20'
-              }`}
-              aria-label="Set API key"
-            >
-              <KeyRound size={14} />
-              <span className="hidden sm:inline">{apiKey ? 'Key Set' : 'Set Key'}</span>
-            </button>
-
             {/* Auth */}
             {session?.user ? (
               <div className="flex items-center gap-1">
@@ -302,14 +265,6 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-semibold text-[color:var(--severity-high)]">Analysis Error</p>
               <p className="text-xs text-foreground/80 mt-0.5">{error}</p>
-              {error.toLowerCase().includes('key') && (
-                <button
-                  onClick={() => setKeyModalOpen(true)}
-                  className="mt-2 text-xs text-primary underline underline-offset-2"
-                >
-                  Update API Key
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -343,12 +298,6 @@ export default function DashboardPage() {
         onClose={() => setHistoryOpen(false)}
         onRestore={handleRestore}
         onClear={handleClearHistory}
-      />
-      <ApiKeyModal
-        open={keyModalOpen}
-        currentKey={apiKey}
-        onSave={handleSaveKey}
-        onClose={() => setKeyModalOpen(false)}
       />
     </div>
   )

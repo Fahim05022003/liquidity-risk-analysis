@@ -24,11 +24,15 @@ Response schema (return ONLY this JSON object):
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as AnalysisRequest & { apiKey: string }
-    const { balances, transactions, apiKey } = body
+    const body = await req.json() as AnalysisRequest
+    const { balances, transactions } = body
 
-    if (!apiKey || !apiKey.startsWith('sk-')) {
-      return NextResponse.json({ error: 'Invalid or missing OpenAI API key.' }, { status: 400 })
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured on server. Please set OPENAI_API_KEY environment variable.' },
+        { status: 500 }
+      )
     }
 
     const openai = new OpenAI({ apiKey })
