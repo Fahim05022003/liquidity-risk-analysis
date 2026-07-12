@@ -44,10 +44,11 @@ function buildArc(score: number): string {
   const endDeg = startDeg - (score / 100) * totalDeg
 
   const toRad = (d: number) => (d * Math.PI) / 180
-  const x1 = cx + R * Math.cos(toRad(startDeg))
-  const y1 = cy - R * Math.sin(toRad(startDeg))
-  const x2 = cx + R * Math.cos(toRad(endDeg))
-  const y2 = cy - R * Math.sin(toRad(endDeg))
+  const round = (n: number) => Math.round(n * 1e6) / 1e6
+  const x1 = round(cx + R * Math.cos(toRad(startDeg)))
+  const y1 = round(cy - R * Math.sin(toRad(startDeg)))
+  const x2 = round(cx + R * Math.cos(toRad(endDeg)))
+  const y2 = round(cy - R * Math.sin(toRad(endDeg)))
   const large = (score / 100) * totalDeg > 180 ? 1 : 0
 
   return `M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`
@@ -60,10 +61,11 @@ function buildTrack(): string {
   const startDeg = 220
   const endDeg = -40
   const toRad = (d: number) => (d * Math.PI) / 180
-  const x1 = cx + R * Math.cos(toRad(startDeg))
-  const y1 = cy - R * Math.sin(toRad(startDeg))
-  const x2 = cx + R * Math.cos(toRad(endDeg))
-  const y2 = cy - R * Math.sin(toRad(endDeg))
+  const round = (n: number) => Math.round(n * 1e6) / 1e6
+  const x1 = round(cx + R * Math.cos(toRad(startDeg)))
+  const y1 = round(cy - R * Math.sin(toRad(startDeg)))
+  const x2 = round(cx + R * Math.cos(toRad(endDeg)))
+  const y2 = round(cy - R * Math.sin(toRad(endDeg)))
   return `M ${x1} ${y1} A ${R} ${R} 0 1 1 ${x2} ${y2}`
 }
 
