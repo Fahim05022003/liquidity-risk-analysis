@@ -43,6 +43,8 @@ const DEFAULT_TRANSACTIONS: Omit<Transaction, 'id'>[] = [
 ]
 
 const LS_KEY_HISTORY = 'alrip_history'
+const LS_KEY_BALANCES = 'alrip_balances'
+const LS_KEY_TRANSACTIONS = 'alrip_transactions'
 const MAX_HISTORY = 20
 
 function loadHistory(): HistoryEntry[] {
@@ -57,6 +59,34 @@ function loadHistory(): HistoryEntry[] {
 
 function saveHistory(entries: HistoryEntry[]) {
   localStorage.setItem(LS_KEY_HISTORY, JSON.stringify(entries.slice(-MAX_HISTORY)))
+}
+
+function loadBalances(): BalancesInput {
+  if (typeof window === 'undefined') return DEFAULT_BALANCES
+  try {
+    const raw = localStorage.getItem(LS_KEY_BALANCES)
+    return raw ? (JSON.parse(raw) as BalancesInput) : DEFAULT_BALANCES
+  } catch {
+    return DEFAULT_BALANCES
+  }
+}
+
+function saveBalances(balances: BalancesInput) {
+  localStorage.setItem(LS_KEY_BALANCES, JSON.stringify(balances))
+}
+
+function loadTransactions(): Omit<Transaction, 'id'>[] {
+  if (typeof window === 'undefined') return DEFAULT_TRANSACTIONS
+  try {
+    const raw = localStorage.getItem(LS_KEY_TRANSACTIONS)
+    return raw ? (JSON.parse(raw) as Omit<Transaction, 'id'>[]) : DEFAULT_TRANSACTIONS
+  } catch {
+    return DEFAULT_TRANSACTIONS
+  }
+}
+
+function saveTransactions(transactions: Omit<Transaction, 'id'>[]) {
+  localStorage.setItem(LS_KEY_TRANSACTIONS, JSON.stringify(transactions))
 }
 
 function transactionImpact(transactions: Omit<Transaction, 'id'>[]): BalancesInput {
@@ -99,7 +129,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setHistory(loadHistory())
+    setBalances(loadBalances())
+    setTransactions(loadTransactions())
   }, [])
+
+  useEffect(() => {
+    saveBalances(balances)
+  }, [balances])
+
+  useEffect(() => {
+    saveTransactions(transactions)
+  }, [transactions])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
