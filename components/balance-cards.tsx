@@ -67,7 +67,8 @@ function formatBDT(value: number): string {
 export function BalanceCards({ balances, onChange }: BalanceCardsProps) {
   function handleChange(key: keyof BalancesInput, raw: string) {
     const parsed = parseFloat(raw.replace(/,/g, '')) || 0
-    onChange({ ...balances, [key]: parsed })
+    const validated = Math.max(0, parsed)
+    onChange({ ...balances, [key]: validated })
   }
 
   return (

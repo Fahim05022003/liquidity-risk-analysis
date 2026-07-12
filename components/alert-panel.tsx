@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, CheckCircle2, Info, ShieldAlert, ClipboardList } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info, ShieldAlert, ClipboardList, Clock3, Radio } from 'lucide-react'
 import type { AnalysisResult } from '@/lib/types'
 
 interface AlertPanelProps {
@@ -101,6 +101,39 @@ export function AlertPanel({ result, isLoading }: AlertPanelProps) {
           </div>
         </div>
       </div>
+
+      {result.source === 'live_forecast' && (
+        <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+          <Radio size={13} className="text-primary" />
+          Live forecast · rolling 15-minute window
+        </div>
+      )}
+
+      {result.projected_exhaustion_minutes !== undefined && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="rounded-lg border border-border bg-background/50 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cash remaining</p>
+            <p className="mt-1 flex items-center gap-1.5 text-sm font-bold font-mono text-foreground">
+              <Clock3 size={14} className={sty.iconColor} />
+              {result.projected_exhaustion_minutes} min
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-background/50 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimated time</p>
+            <p className="mt-1 text-sm font-bold font-mono text-foreground">
+              {result.projected_exhaustion_at
+                ? new Date(result.projected_exhaustion_at).toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit' })
+                : '—'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-background/50 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Main provider</p>
+            <p className="mt-1 text-sm font-bold text-foreground">
+              {result.dominant_provider} · {result.dominant_provider_share}%
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Bengali message */}
       <div className="rounded-lg bg-background/50 border border-border p-3">

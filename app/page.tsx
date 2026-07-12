@@ -4,18 +4,23 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Activity,
   History,
-  KeyRound,
   Zap,
   RefreshCw,
   BarChart3,
   AlertCircle,
+  LogIn,
+  LogOut,
+  User,
 } from 'lucide-react'
 import { BalanceCards } from '@/components/balance-cards'
 import { TransactionForm } from '@/components/transaction-form'
 import { RiskGauge } from '@/components/risk-gauge'
 import { AlertPanel } from '@/components/alert-panel'
 import { HistoryDrawer } from '@/components/history-drawer'
-import { ApiKeyModal } from '@/components/api-key-modal'
+import { saveAnalysisResult } from '@/app/actions/analysis'
+import { createLiquidityForecast } from '@/lib/liquidity-forecast'
+import { useSession, signOut } from '@/lib/auth-client'
+import Link from 'next/link'
 import type {
   BalancesInput,
   Transaction,
@@ -30,14 +35,16 @@ const DEFAULT_BALANCES: BalancesInput = {
   rocketBalance: 0,
 }
 
+const INITIAL_TIME = Date.now()
 const DEFAULT_TRANSACTIONS: Omit<Transaction, 'id'>[] = [
-  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success' },
-  { provider: 'bKash', type: 'Cash Out', amount: 24500, status: 'Success' },
-  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success' },
+  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success', timestamp: INITIAL_TIME - 12 * 60 * 1000 },
+  { provider: 'bKash', type: 'Cash Out', amount: 24500, status: 'Success', timestamp: INITIAL_TIME - 7 * 60 * 1000 },
+  { provider: 'bKash', type: 'Cash Out', amount: 25000, status: 'Success', timestamp: INITIAL_TIME - 2 * 60 * 1000 },
 ]
 
 const LS_KEY_HISTORY = 'alrip_history'
-const LS_KEY_API = 'alrip_openai_key'
+const LS_KEY_BALANCES = 'alrip_balances'
+const LS_KEY_TRANSACTIONS = 'alrip_transactions'
 const MAX_HISTORY = 20
 
 function loadHistory(): HistoryEntry[] {
@@ -54,16 +61,64 @@ function saveHistory(entries: HistoryEntry[]) {
   localStorage.setItem(LS_KEY_HISTORY, JSON.stringify(entries.slice(-MAX_HISTORY)))
 }
 
-function loadApiKey(): string {
-  if (typeof window === 'undefined') return ''
-  return localStorage.getItem(LS_KEY_API) ?? ''
+function loadBalances(): BalancesInput {
+  if (typeof window === 'undefined') return DEFAULT_BALANCES
+  try {
+    const raw = localStorage.getItem(LS_KEY_BALANCES)
+    return raw ? (JSON.parse(raw) as BalancesInput) : DEFAULT_BALANCES
+  } catch {
+    return DEFAULT_BALANCES
+  }
 }
 
-function saveApiKey(key: string) {
-  localStorage.setItem(LS_KEY_API, key)
+function saveBalances(balances: BalancesInput) {
+  localStorage.setItem(LS_KEY_BALANCES, JSON.stringify(balances))
+}
+
+function loadTransactions(): Omit<Transaction, 'id'>[] {
+  if (typeof window === 'undefined') return DEFAULT_TRANSACTIONS
+  try {
+    const raw = localStorage.getItem(LS_KEY_TRANSACTIONS)
+    return raw ? (JSON.parse(raw) as Omit<Transaction, 'id'>[]) : DEFAULT_TRANSACTIONS
+  } catch {
+    return DEFAULT_TRANSACTIONS
+  }
+}
+
+function saveTransactions(transactions: Omit<Transaction, 'id'>[]) {
+  localStorage.setItem(LS_KEY_TRANSACTIONS, JSON.stringify(transactions))
+}
+
+function transactionImpact(transactions: Omit<Transaction, 'id'>[]): BalancesInput {
+  return transactions.reduce<BalancesInput>(
+    (impact, transaction) => {
+      if (transaction.status !== 'Success' || transaction.amount <= 0) return impact
+
+      const providerKey =
+        transaction.provider === 'bKash'
+          ? 'bkashBalance'
+          : transaction.provider === 'Nagad'
+            ? 'nagadBalance'
+            : 'rocketBalance'
+
+      if (transaction.type === 'Cash Out') {
+        impact.physicalCash -= transaction.amount
+        impact[providerKey] += transaction.amount
+      } else if (transaction.type === 'Cash In') {
+        impact.physicalCash += transaction.amount
+        impact[providerKey] -= transaction.amount
+      } else {
+        impact[providerKey] -= transaction.amount
+      }
+
+      return impact
+    },
+    { physicalCash: 0, bkashBalance: 0, nagadBalance: 0, rocketBalance: 0 }
+  )
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession()
   const [balances, setBalances] = useState<BalancesInput>(DEFAULT_BALANCES)
   const [transactions, setTransactions] = useState<Omit<Transaction, 'id'>[]>(DEFAULT_TRANSACTIONS)
   const [result, setResult] = useState<AnalysisResult | null>(null)
@@ -71,31 +126,42 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [keyModalOpen, setKeyModalOpen] = useState(false)
-  const [apiKey, setApiKey] = useState('')
 
   useEffect(() => {
     setHistory(loadHistory())
-    setApiKey(loadApiKey())
+    setBalances(loadBalances())
+    setTransactions(loadTransactions())
   }, [])
 
-  const handleSaveKey = useCallback((key: string) => {
-    setApiKey(key)
-    saveApiKey(key)
-  }, [])
+  useEffect(() => {
+    saveBalances(balances)
+  }, [balances])
+
+  useEffect(() => {
+    saveTransactions(transactions)
+  }, [transactions])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setResult(createLiquidityForecast(balances, transactions))
+      setError(null)
+    }, 1500)
+
+    return () => window.clearTimeout(timer)
+  }, [balances, transactions])
 
   const handleAnalyze = useCallback(async () => {
-    if (!apiKey) {
-      setKeyModalOpen(true)
-      return
-    }
     setIsLoading(true)
     setError(null)
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ balances, transactions, apiKey }),
+        body: JSON.stringify({
+          balances,
+          transactions,
+          forecast: createLiquidityForecast(balances, transactions),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -104,6 +170,11 @@ export default function DashboardPage() {
       }
       const analysisResult = data as AnalysisResult
       setResult(analysisResult)
+
+      // Persist to Neon if signed in (fire-and-forget, don't block UI)
+      if (session?.user) {
+        saveAnalysisResult({ balances, transactions }, analysisResult).catch(() => {})
+      }
 
       const entry: HistoryEntry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -121,7 +192,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [apiKey, balances, transactions])
+  }, [balances, transactions, session?.user])
 
   function handleRestore(entry: HistoryEntry) {
     setBalances(entry.request.balances)
@@ -132,6 +203,21 @@ export default function DashboardPage() {
   function handleClearHistory() {
     setHistory([])
     localStorage.removeItem(LS_KEY_HISTORY)
+  }
+
+  function handleTransactionsChange(nextTransactions: Omit<Transaction, 'id'>[]) {
+    const previousImpact = transactionImpact(transactions)
+    const nextImpact = transactionImpact(nextTransactions)
+
+    const updatedBalances = {
+      physicalCash: Math.max(0, balances.physicalCash + nextImpact.physicalCash - previousImpact.physicalCash),
+      bkashBalance: Math.max(0, balances.bkashBalance + nextImpact.bkashBalance - previousImpact.bkashBalance),
+      nagadBalance: Math.max(0, balances.nagadBalance + nextImpact.nagadBalance - previousImpact.nagadBalance),
+      rocketBalance: Math.max(0, balances.rocketBalance + nextImpact.rocketBalance - previousImpact.rocketBalance),
+    }
+
+    setBalances(updatedBalances)
+    setTransactions(nextTransactions)
   }
 
   const totalBalance =
@@ -199,18 +285,35 @@ export default function DashboardPage() {
                 </span>
               )}
             </button>
-            <button
-              onClick={() => setKeyModalOpen(true)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                apiKey
-                  ? 'text-[color:var(--cash)] bg-[color:var(--cash)]/10 hover:bg-[color:var(--cash)]/20'
-                  : 'text-[color:var(--severity-medium)] bg-[color:var(--severity-medium)]/10 hover:bg-[color:var(--severity-medium)]/20'
-              }`}
-              aria-label="Set API key"
-            >
-              <KeyRound size={14} />
-              <span className="hidden sm:inline">{apiKey ? 'Key Set' : 'Set Key'}</span>
-            </button>
+            {/* Auth */}
+            {session?.user ? (
+              <div className="flex items-center gap-1">
+                <span
+                  title={session.user.email}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground bg-muted"
+                >
+                  <User size={12} />
+                  <span className="hidden sm:inline max-w-[80px] truncate">
+                    {session.user.name ?? session.user.email}
+                  </span>
+                </span>
+                <button
+                  onClick={() => signOut()}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  aria-label="Sign out"
+                >
+                  <LogOut size={12} />
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/sign-in"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+              >
+                <LogIn size={14} />
+                <span className="hidden sm:inline">Sign In</span>
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -223,7 +326,7 @@ export default function DashboardPage() {
             Agent Liquidity &amp; Risk Intelligence Platform
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            মাল্টি-প্রোভাইডার MFS লেনদেন বিশ্লেষণ — bKash · Nagad · Rocket
+            লাইভ ১৫-মিনিট পূর্বাভাস — কখন ক্যাশ শেষ হতে পারে এবং কোন provider চাপ তৈরি করছে
           </p>
         </div>
 
@@ -241,7 +344,7 @@ export default function DashboardPage() {
         {/* Transaction Form + Risk Gauge */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <TransactionForm transactions={transactions} onChange={setTransactions} />
+            <TransactionForm transactions={transactions} onChange={handleTransactionsChange} />
           </div>
           <div>
             <RiskGauge result={result} isLoading={isLoading} />
@@ -260,14 +363,6 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-semibold text-[color:var(--severity-high)]">Analysis Error</p>
               <p className="text-xs text-foreground/80 mt-0.5">{error}</p>
-              {error.toLowerCase().includes('key') && (
-                <button
-                  onClick={() => setKeyModalOpen(true)}
-                  className="mt-2 text-xs text-primary underline underline-offset-2"
-                >
-                  Update API Key
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -301,12 +396,6 @@ export default function DashboardPage() {
         onClose={() => setHistoryOpen(false)}
         onRestore={handleRestore}
         onClear={handleClearHistory}
-      />
-      <ApiKeyModal
-        open={keyModalOpen}
-        currentKey={apiKey}
-        onSave={handleSaveKey}
-        onClose={() => setKeyModalOpen(false)}
       />
     </div>
   )
