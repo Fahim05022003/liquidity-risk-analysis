@@ -33,6 +33,12 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
       return
     }
 
+    if (isSignUp) {
+      localStorage.removeItem('alrip_balances')
+      localStorage.removeItem('alrip_transactions')
+      localStorage.removeItem('alrip_history')
+    }
+
     router.push('/')
     router.refresh()
   }
