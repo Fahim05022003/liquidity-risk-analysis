@@ -169,12 +169,14 @@ export default function DashboardPage() {
     const previousImpact = transactionImpact(transactions)
     const nextImpact = transactionImpact(nextTransactions)
 
-    setBalances((current) => ({
-      physicalCash: current.physicalCash + nextImpact.physicalCash - previousImpact.physicalCash,
-      bkashBalance: current.bkashBalance + nextImpact.bkashBalance - previousImpact.bkashBalance,
-      nagadBalance: current.nagadBalance + nextImpact.nagadBalance - previousImpact.nagadBalance,
-      rocketBalance: current.rocketBalance + nextImpact.rocketBalance - previousImpact.rocketBalance,
-    }))
+    const updatedBalances = {
+      physicalCash: Math.max(0, balances.physicalCash + nextImpact.physicalCash - previousImpact.physicalCash),
+      bkashBalance: Math.max(0, balances.bkashBalance + nextImpact.bkashBalance - previousImpact.bkashBalance),
+      nagadBalance: Math.max(0, balances.nagadBalance + nextImpact.nagadBalance - previousImpact.nagadBalance),
+      rocketBalance: Math.max(0, balances.rocketBalance + nextImpact.rocketBalance - previousImpact.rocketBalance),
+    }
+
+    setBalances(updatedBalances)
     setTransactions(nextTransactions)
   }
 
