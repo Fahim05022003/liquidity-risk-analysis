@@ -57,6 +57,34 @@ function saveHistory(entries: HistoryEntry[]) {
   localStorage.setItem(LS_KEY_HISTORY, JSON.stringify(entries.slice(-MAX_HISTORY)))
 }
 
+function transactionImpact(transactions: Omit<Transaction, 'id'>[]): BalancesInput {
+  return transactions.reduce<BalancesInput>(
+    (impact, transaction) => {
+      if (transaction.status !== 'Success' || transaction.amount <= 0) return impact
+
+      const providerKey =
+        transaction.provider === 'bKash'
+          ? 'bkashBalance'
+          : transaction.provider === 'Nagad'
+            ? 'nagadBalance'
+            : 'rocketBalance'
+
+      if (transaction.type === 'Cash Out') {
+        impact.physicalCash -= transaction.amount
+        impact[providerKey] += transaction.amount
+      } else if (transaction.type === 'Cash In') {
+        impact.physicalCash += transaction.amount
+        impact[providerKey] -= transaction.amount
+      } else {
+        impact[providerKey] -= transaction.amount
+      }
+
+      return impact
+    },
+    { physicalCash: 0, bkashBalance: 0, nagadBalance: 0, rocketBalance: 0 }
+  )
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession()
   const [balances, setBalances] = useState<BalancesInput>(DEFAULT_BALANCES)
@@ -120,6 +148,20 @@ export default function DashboardPage() {
   function handleClearHistory() {
     setHistory([])
     localStorage.removeItem(LS_KEY_HISTORY)
+  }
+
+  function handleTransactionsChange(nextTransactions: Omit<Transaction, 'id'>[]) {
+    const previousImpact = transactionImpact(transactions)
+    const nextImpact = transactionImpact(nextTransactions)
+
+    setBalances((current) => ({
+      physicalCash: current.physicalCash + nextImpact.physicalCash - previousImpact.physicalCash,
+      bkashBalance: current.bkashBalance + nextImpact.bkashBalance - previousImpact.bkashBalance,
+      nagadBalance: current.nagadBalance + nextImpact.nagadBalance - previousImpact.nagadBalance,
+      rocketBalance: current.rocketBalance + nextImpact.rocketBalance - previousImpact.rocketBalance,
+    }))
+    setTransactions(nextTransactions)
+    setResult(null)
   }
 
   const totalBalance =
@@ -246,7 +288,7 @@ export default function DashboardPage() {
         {/* Transaction Form + Risk Gauge */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <TransactionForm transactions={transactions} onChange={setTransactions} />
+            <TransactionForm transactions={transactions} onChange={handleTransactionsChange} />
           </div>
           <div>
             <RiskGauge result={result} isLoading={isLoading} />
